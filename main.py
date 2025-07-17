@@ -1,10 +1,11 @@
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
 
 app = FastAPI()
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,6 +14,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Route d'accueil
+@app.get("/")
+def root():
+    return {"message": "Bienvenue sur l'API JobPilot 🚀"}
+
+# Modèle pour la génération de devis
 class DevisRequest(BaseModel):
     client: str
     produit: str
@@ -22,7 +29,9 @@ class DevisRequest(BaseModel):
 
 @app.post("/generate-devis")
 async def generate_devis(req: DevisRequest):
-    return {"pdf_url": f"https://fake-pdf-storage.com/{uuid.uuid4()}.pdf"}
+    return {
+        "pdf_url": f"https://fake-pdf-storage.com/{uuid.uuid4()}.pdf"
+    }
 
 @app.post("/generate-message")
 async def generate_message(data: dict):
@@ -31,4 +40,6 @@ async def generate_message(data: dict):
 
 @app.post("/generate-promo")
 async def generate_promo(data: dict):
-    return {"promo_text": f"Promo spéciale de {data['nom']}: {data['promo']} - Offre valable jusqu’au {data['date']}."}
+    return {
+        "promo_text": f"Promo spéciale de {data['nom']}: {data['promo']} - Offre valable jusqu’au {data['date']}."
+    }
