@@ -69,3 +69,6 @@ async def generate_message(data: dict):
 @app.post("/generate-promo")
 async def generate_promo(data: dict):
     return {"promo_text": f"Promo spéciale de {data['nom']}: {data['promo']} - Offre valable jusqu’au {data['date']}."}
+@app.get("/")
+def read_root():
+    return {"message": "Bienvenue sur l’API JobpilotAI 🚀"}
