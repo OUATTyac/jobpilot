@@ -1,5 +1,8 @@
-
 fastapi
 uvicorn
 pydantic
 reportlab
+Pillow
+google-generativeai
+python-dotenv
+textwrap3
