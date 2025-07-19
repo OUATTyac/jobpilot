@@ -138,24 +138,25 @@ async def generate_promo_image(req: PromoRequest):
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
     # 2. Génération avec Imagen
-    try:
-        print("🚀 Génération avec Imagen...")
-        image_model = genai.GenerativeModel("imagen-3.0")
-        response = image_model.generate_content(
-            image_prompt,
-            generation_config=types.GenerationConfig(response_mime_type="image/png")
-        )
+   try:
+    print("🚀 Génération avec Imagen...")
+    image_model = genai.GenerativeModel("imagen-3")
 
-        image_part = response.parts[0]
-        image_bytes = image_part.inline_data.data
-        img = Image.open(BytesIO(image_bytes))
+    response = image_model.generate_content(
+        image_prompt,
+        response_mime_type="image/png"  # Ici, directement dans la méthode
+    )
 
-        img_id = f"promo_ai_{uuid.uuid4()}.png"
-        img_path = os.path.join(IMG_DIR, img_id)
-        img.save(img_path)
+    image_part = response.parts[0]
+    image_bytes = image_part.inline_data.data
+    img = Image.open(BytesIO(image_bytes))
 
-        print("✅ Image générée avec succès.")
-        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
+    img_id = f"promo_ai_{uuid.uuid4()}.png"
+    img_path = os.path.join(IMG_DIR, img_id)
+    img.save(img_path)
+
+    print("✅ Image générée avec succès.")
+    return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
         # --- 3. MÉTHODE DE SECOURS (FALLBACK) ---
