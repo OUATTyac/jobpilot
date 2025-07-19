@@ -139,7 +139,7 @@ async def generate_promo_image(req: PromoRequest):
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
     # 2. Génération avec Imagen
-    try:
+try:
     print("🚀 Génération avec Imagen...")
 
     # Construire correctement la requête d’image
@@ -161,7 +161,7 @@ async def generate_promo_image(req: PromoRequest):
     print("✅ Image générée avec succès.")
     return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
-    except Exception as e:
+except Exception as e:
         # 3. MÉTHODE DE SECOURS (Fallback avec Pillow)
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         print("🎨 Passage à la méthode de secours (Pillow).")
