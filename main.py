@@ -1,4 +1,6 @@
 # main.py
+import io
+import base64
 import os
 import uuid
 import textwrap
@@ -13,6 +15,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
+from google import genai
+from io import BytesIO
 
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="3.0.0")
@@ -141,34 +145,49 @@ async def generate_message(req: MessageRequest):
     response = model.generate_content(prompt)
     return {"message_text": response.text}
 
+# init Gemini
+client = genai.Client()
+model = client.models.get("gemini-2.0-flash-preview-image-generation")
 
-@app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
+class PromoRequest(BaseModel):
+    nom: str
+    promo: str
+    date: str
+
+IMG_DIR = "temp_images"
+os.makedirs(IMG_DIR, exist_ok=True)
+
+@app.post("/generate-promo-image", response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
-    promo_text = "Offre Spéciale !"
-    if model:
-        prompt = f"""Crée une accroche marketing très courte (5-10 mots max) pour cette promotion : Artisan: {req.nom}, Promotion: {req.promo}, Fin: {req.date}. Rédige uniquement l'accroche."""
-        try:
-            response = model.generate_content(prompt)
-            promo_text = response.text.strip().replace('"', '')
-        except Exception: pass
+    if not model:
+        return {"detail": "IA non configurée."}
 
-    img_id = f"promo_{uuid.uuid4()}.png"
-    img_path = os.path.join(IMG_DIR, img_id)
-    try: img = Image.open("font/background.jpg").convert("RGBA")
-    except FileNotFoundError: img = Image.new('RGB', (1080, 1080), color='#FFD700')
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 128))
-    img = Image.alpha_composite(img, overlay)
+    # Génération de l'image avec Gemini
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-preview-image-generation",
+        contents=f"Generate a vibrant promotional poster for artisan {req.nom} with text '{req.promo}' in modern African style.",
+        config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"])
+    )
+
+    # extraction image du premier ‘part’ inline_data
+    img = None
+    for part in response.candidates[0].content.parts:
+        if part.inline_data:
+            img = Image.open(BytesIO(part.inline_data.data))
+            break
+
+    if img is None:
+        return {"detail": "Pas d'image générée."}
+
+    # Ajout de texte “Promo” via Pillow
     draw = ImageDraw.Draw(img)
-    try:
-        title_font, subtitle_font, promo_font = ImageFont.truetype("font/Poppins-Bold.ttf", 110), ImageFont.truetype("font/Poppins-Regular.ttf", 60), ImageFont.truetype("font/Poppins-Bold.ttf", 70)
-    except IOError: title_font, subtitle_font, promo_font = ImageFont.load_default(), ImageFont.load_default(), ImageFont.load_default()
-    draw.text((540, 400), "\n".join(textwrap.wrap(promo_text, width=20)), font=title_font, fill='white', anchor='mm', align='center')
-    draw.text((540, 600), f"Chez {req.nom}", font=subtitle_font, fill='#FFD700', anchor='mm', align='center')
-    draw.text((540, 100), "✨ PROMO SPÉCIALE ✨", font=promo_font, fill='white', anchor='ms', align='center')
-    draw.text((540, 980), f"Valable jusqu'au {req.date}", font=subtitle_font, fill='white', anchor='ms', align='center')
-    img = img.convert("RGB")
-    img.save(img_path)
-    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
+    font = ImageFont.load_default()
+    text = f"{req.promo}\nChez {req.nom}\nJusqu'au {req.date}"
+    draw.multiline_text((20,20), text, fill="white", font=font)
+
+    path = os.path.join(IMG_DIR, f"{uuid.uuid4()}.png")
+    img.save(path)
+    return FileResponse(path, media_type="image/png", filename=os.path.basename(path))
 
 
 @app.post("/chat", tags=["Assistant IA"])
