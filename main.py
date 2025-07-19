@@ -138,41 +138,47 @@ async def generate_promo_image(req: PromoRequest):
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
     # 2. Génération avec Imagen
-try:
-    print("🚀 Génération avec Imagen...")
-    image_model = genai.GenerativeModel("imagen-3")
+    try:
+        print("🚀 Génération avec Imagen...")
+        image_model = genai.GenerativeModel("imagen-3")
 
-    response = image_model.generate_content(
-        image_prompt,
-        response_mime_type="image/png"  # Ici, directement dans la méthode
-    )
+        response = image_model.generate_content(
+            image_prompt,
+            response_mime_type="image/png"
+        )
 
-    image_part = response.parts[0]
-    image_bytes = image_part.inline_data.data
-    img = Image.open(BytesIO(image_bytes))
+        image_part = response.parts[0]
+        image_bytes = image_part.inline_data.data
+        img = Image.open(BytesIO(image_bytes))
 
-    img_id = f"promo_ai_{uuid.uuid4()}.png"
-    img_path = os.path.join(IMG_DIR, img_id)
-    img.save(img_path)
+        img_id = f"promo_ai_{uuid.uuid4()}.png"
+        img_path = os.path.join(IMG_DIR, img_id)
+        img.save(img_path)
 
-    print("✅ Image générée avec succès.")
-    return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
+        print("✅ Image générée avec succès.")
+        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
-except Exception as e:
-        # --- 3. MÉTHODE DE SECOURS (FALLBACK) ---
+    except Exception as e:
+        # 3. MÉTHODE DE SECOURS (Fallback avec Pillow)
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         print("🎨 Passage à la méthode de secours (Pillow).")
+
         promo_text_for_fallback = f"{req.product.upper()}\nÀ {req.price} FCFA"
         tagline = "L'Offre à ne pas Manquer !"
-        
-        img_id = f"promo_fallback_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
+
+        img_id = f"promo_fallback_{uuid.uuid4()}.png"
+        img_path = os.path.join(IMG_DIR, img_id)
+
         try:
             img = Image.open("font/background.jpg").resize((3000, 3000), Image.Resampling.LANCZOS)
         except FileNotFoundError:
             img = Image.new('RGB', (3000, 3000), color='#4F46E5')
 
-        if img.mode != 'RGBA': img = img.convert('RGBA')
-        overlay = Image.new('RGBA', img.size, (0, 0, 0, 160)); img = Image.alpha_composite(img, overlay)
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 160))
+        img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img)
 
         try:
@@ -180,16 +186,19 @@ except Exception as e:
             font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
             font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 40)
         except IOError:
-            font_heavy, font_tagline, font_light = [ImageFont.load_default()]*3
+            font_heavy = font_tagline = font_light = ImageFont.load_default()
 
         draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_tagline, fill='white', anchor='mm', align='center')
         draw.text((540, 480), "\n".join(textwrap.wrap(promo_text_for_fallback, width=18)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
         draw.text((540, 700), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
         draw.line([(50, 880), (1030, 880)], fill="white", width=2)
         draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
-        
-        img = img.convert("RGB"); img.save(img_path)
+
+        img = img.convert("RGB")
+        img.save(img_path)
+
         return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
+
 
 @app.post("/chat", tags=["Assistant IA"])
 async def handle_chat(req: ChatRequest):
