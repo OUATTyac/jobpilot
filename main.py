@@ -20,13 +20,13 @@ import google.generativeai as genai
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-
+allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 # Gemini Config
 text_model = None
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('gemini-2.5-flash')
         print("✅ Gemini API (texte) configurée.")
     else:
         print("⚠️ GEMINI_API_KEY non définie.")
@@ -81,7 +81,7 @@ class FeedbackRequest(BaseModel):
 
 @app.get("/", tags=["Status"])
 def read_root():
-    return {"message": "API JobpilotAI v5.1 - Version de Présentation"}
+    return {"message": "API JobpilotAI v5.1"}
 
 @app.post("/generate-devis", tags=["Générateurs"], response_class=FileResponse)
 async def generate_devis(req: DevisRequest):
@@ -99,7 +99,12 @@ async def generate_devis(req: DevisRequest):
     current_y = table_y_start - 50; total = 0; c.setFont(FONT_NAME, 11); c.setFillColor(colors.black)
     for i, item in enumerate(req.items):
         if i % 2 == 1: c.setFillColor(colors.HexColor("#F3F4F6")); c.rect(40, current_y - 5, width - 80, 20, fill=1, stroke=0); c.setFillColor(colors.black)
-        c.drawString(50, current_y, item.description); c.drawRightString(width - 50, current_y, item.price); current_y -= 20; total += float(item.price.replace(',', '.')) if item.price.replace('.', '', 1).isdigit() else 0
+        c.drawString(50, current_y, item.description); c.drawRightString(width - 50, current_y, item.price); current_y -= 20
+        # CORRECTION ANTI-CRASH
+        try:
+            total += float(item.price.replace(',', '.'))
+        except (ValueError, AttributeError):
+            continue # On ignore si le prix n'est pas un nombre valide
     c.setFillColor(primary_color); c.rect(width / 2, current_y - 50, width / 2 - 40, 40, fill=1, stroke=0); c.setFont(FONT_BOLD_NAME, 16); c.setFillColor(colors.white); c.drawRightString(width - 50, current_y - 40, f"TOTAL : {total:.0f} FCFA")
     c.setFont(FONT_NAME, 9); c.setFillColor(grey_color); c.drawCentredString(width / 2, 60, "Document généré avec JobpilotAI."); c.setFont(FONT_BOLD_NAME, 10); c.setFillColor(colors.black); c.drawCentredString(width / 2, 40, "Merci pour votre confiance !")
     c.showPage(); c.save()
@@ -114,31 +119,49 @@ async def generate_message(req: MessageRequest):
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
     if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
-    main_offer_text = req.promo.upper()
-    prompt = f"""Crée un slogan court et percutant (3-5 mots max) pour une promotion sur : '{req.promo}'."""
+    
+    # IA pour le slogan SEULEMENT
+    prompt = f"""Crée un slogan court et percutant (3-5 mots max) pour une promotion sur des '{req.product}'. Ne mentionne pas le prix. Exemples: 'Le style à vos pieds', 'L'élégance accessible'."""
     try:
         response = text_model.generate_content(prompt)
         tagline = response.text.strip().replace('"', '')
     except Exception:
         tagline = "Ne manquez pas cette occasion !"
+
     img_id = f"promo_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
     try:
         img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
     except FileNotFoundError:
         img = Image.new('RGB', (1080, 1080), color='#4F46E5')
+
     if img.mode != 'RGBA': img = img.convert('RGBA')
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 140)); img = Image.alpha_composite(img, overlay)
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 160)) # Filtre plus sombre pour le bois
+    img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
-    whatsapp_number = "2250556383000"; qr_data = f"https://wa.me/{whatsapp_number}?text=Bonjour, je suis intéressé(e) par votre promotion '{req.promo}'."; qr = qrcode.QRCode(box_size=8, border=2); qr.add_data(qr_data); qr_img = qr.make_image(fill_color="white", back_color="transparent").convert('RGBA')
+
+    whatsapp_number = "2250556383000"
+    qr_data = f"https://wa.me/{whatsapp_number}?text=Bonjour, je suis intéressé par la promotion sur les {req.product}."
+    qr = qrcode.QRCode(box_size=8, border=2); qr.add_data(qr_data); qr_img = qr.make_image(fill_color="white", back_color="transparent").convert('RGBA')
+    
     try:
-        font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 150); font_medium = ImageFont.truetype("font/Poppins-Regular.ttf", 70); font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50); font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+        font_product = ImageFont.truetype("font/Poppins-Bold.ttf", 140)
+        font_price = ImageFont.truetype("font/Poppins-Bold.ttf", 100)
+        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50)
+        font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
     except IOError:
-        font_heavy, font_medium, font_tagline, font_light = [ImageFont.load_default()]*4
-    draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_medium, fill='white', anchor='mm', align='center')
-    draw.text((540, 450), "\n".join(textwrap.wrap(main_offer_text, width=15)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
-    draw.text((540, 620), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
-    draw.line([(50, 880), (1030, 880)], fill="white", width=2); draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
-    img.paste(qr_img, (50, 50), qr_img); draw.text((qr_img.width + 70, 90), "Scannez-moi !", font=font_light, fill='white', anchor='lm')
+        font_product, font_price, font_tagline, font_light = [ImageFont.load_default()]*4
+
+    # Composition Professionnelle
+    draw.text((540, 300), req.product.upper(), font=font_product, fill='white', anchor='mm', align='center')
+    draw.text((540, 500), f"À SEULEMENT\n{req.price} FCFA", font=font_price, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
+    draw.text((540, 650), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
+    
+    draw.line([(50, 880), (1030, 880)], fill="white", width=2)
+    draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
+    
+    img.paste(qr_img, (50, 50), qr_img)
+    draw.text((qr_img.width + 70, 90), "Scannez pour commander !", font=font_light, fill='white', anchor='lm')
+
     img = img.convert("RGB"); img.save(img_path)
     return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
 
