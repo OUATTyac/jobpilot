@@ -1,0 +1,31 @@
+# Fichier .gitignore
+
+# Fichiers de cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Dossier d'environnement virtuel
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Fichiers de configuration locaux
+.env
+.env.*
+
+# Fichiers générés par l'application
+# On les ignore pour ne pas surcharger le dépôt Git avec des PDF/images
+/generated_pdfs/
+/generated_images/
+
+# Fichiers de configuration d'éditeurs
+.vscode/
+.idea/
+
+# Fichiers OS
+.DS_Store
+Thumbs.db
