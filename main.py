@@ -138,7 +138,7 @@ async def generate_promo_image(req: PromoRequest):
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
     # 2. Génération avec Imagen
-   try:
+    try:
     print("🚀 Génération avec Imagen...")
     image_model = genai.GenerativeModel("imagen-3")
 
