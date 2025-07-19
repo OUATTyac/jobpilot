@@ -120,51 +120,73 @@ async def generate_message(req: MessageRequest):
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
     if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
-    
-    # IA pour le slogan SEULEMENT
-    prompt = f"""Crée un slogan court et percutant (3-5 mots max) pour une promotion sur des '{req.product}'. Ne mentionne pas le prix. Exemples: 'Le style à vos pieds', 'L'élégance accessible'."""
+        
+    # 1. Générer un prompt en ANGLAIS pour le modèle d'image
+    prompt_for_image_prompt = f"""
+    Create a vibrant, high-quality, professional advertising poster prompt for an image generation AI.
+    The style should be a mix of modern African aesthetic and clean design. The poster is for a promotion.
+    Product: '{req.product}'
+    Price: '{req.price} FCFA'
+    Artisan: '{req.nom}'
+    The prompt must be in English. Include keywords like 'product photography', 'vibrant colors', 'clean background'.
+    """
     try:
-        response = text_model.generate_content(prompt)
-        tagline = response.text.strip().replace('"', '')
+        image_prompt_response = text_model.generate_content(prompt_for_image_prompt)
+        image_prompt = image_prompt_response.text.strip().replace('"', '')
+        print(f"🖼️ Prompt pour Imagen: {image_prompt}")
     except Exception:
-        tagline = "Ne manquez pas cette occasion !"
+        image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
-    img_id = f"promo_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
+    # 2. Tenter la génération d'image native avec Imagen 3
     try:
-        img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
-    except FileNotFoundError:
-        img = Image.new('RGB', (1080, 1080), color='#4F46E5')
+        print("🚀 Tentative de génération d'image avec Imagen 3...")
+        response = genai.generate_images(
+            model='imagen-3.0-generate-002',
+            prompt=image_prompt,
+        )
+        generated_image_data = response.images[0]
+        # On récupère les bytes de l'image. Note: _image_bytes est une propriété interne.
+        img_bytes = generated_image_data._image_bytes
+        img = Image.open(BytesIO(img_bytes))
+        print("✅ Image générée avec succès par Imagen 3.")
+        
+        img_id = f"promo_ai_{uuid.uuid4()}.png"
+        img_path = os.path.join(IMG_DIR, img_id)
+        img.save(img_path)
+        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
-    if img.mode != 'RGBA': img = img.convert('RGBA')
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 160)) # Filtre plus sombre pour le bois
-    img = Image.alpha_composite(img, overlay)
-    draw = ImageDraw.Draw(img)
+    except Exception as e:
+        print(f"⚠️ Erreur de génération d'image Gemini: {e}")
+        print("🎨 Passage à la méthode de secours (Pillow).")
+        # --- 3. MÉTHODE DE SECOURS (FALLBACK) ---
+        # Si la génération native échoue, on exécute ce code stable.
+        promo_text_for_fallback = f"{req.product.upper()} À {req.price} FCFA"
+        tagline = "L'Offre à ne pas Manquer !"
+        
+        img_id = f"promo_fallback_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
+        try:
+            img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
+        except FileNotFoundError:
+            img = Image.new('RGB', (1080, 1080), color='#4F46E5')
 
-    whatsapp_number = "2250556383000"
-    qr_data = f"https://wa.me/{whatsapp_number}?text=Bonjour, je suis intéressé par la promotion sur les {req.product}."
-    qr = qrcode.QRCode(box_size=8, border=2); qr.add_data(qr_data); qr_img = qr.make_image(fill_color="white", back_color="transparent").convert('RGBA')
-    
-    try:
-        font_product = ImageFont.truetype("font/Poppins-Bold.ttf", 140)
-        font_price = ImageFont.truetype("font/Poppins-Bold.ttf", 100)
-        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50)
-        font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
-    except IOError:
-        font_product, font_price, font_tagline, font_light = [ImageFont.load_default()]*4
+        if img.mode != 'RGBA': img = img.convert('RGBA')
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 160)); img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
 
-    # Composition Professionnelle
-    draw.text((540, 300), req.product.upper(), font=font_product, fill='white', anchor='mm', align='center')
-    draw.text((540, 500), f"À SEULEMENT\n{req.price} FCFA", font=font_price, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
-    draw.text((540, 650), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
-    
-    draw.line([(50, 880), (1030, 880)], fill="white", width=2)
-    draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
-    
-    img.paste(qr_img, (50, 50), qr_img)
-    draw.text((qr_img.width + 70, 90), "Scannez pour commander !", font=font_light, fill='white', anchor='lm')
+        try:
+            font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 150)
+            font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50)
+            font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+        except IOError:
+            font_heavy, font_tagline, font_light = [ImageFont.load_default()]*3
 
-    img = img.convert("RGB"); img.save(img_path)
-    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
+        draw.text((540, 480), "\n".join(textwrap.wrap(promo_text_for_fallback, width=15)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
+        draw.text((540, 650), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
+        draw.line([(50, 880), (1030, 880)], fill="white", width=2)
+        draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
+
+        img = img.convert("RGB"); img.save(img_path)
+        return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
 
 @app.post("/chat", tags=["Assistant IA"])
 async def handle_chat(req: ChatRequest):
