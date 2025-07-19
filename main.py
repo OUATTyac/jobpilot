@@ -20,13 +20,13 @@ import google.generativeai as genai
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
 # Gemini Config
 text_model = None
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('gemini-2.5-flash')
+        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('gemini-2.5-pro')
         print("✅ Gemini API (texte) configurée.")
     else:
         print("⚠️ GEMINI_API_KEY non définie.")
