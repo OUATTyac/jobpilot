@@ -143,13 +143,13 @@ async def generate_promo_image(req: PromoRequest):
         image_model = genai.GenerativeModel("models/imagen-3")
 
         response = image_model.generate_content(
-            contents=[Content(parts=[Part(text=image_prompt)])],
-            generation_config=GenerationConfig(response_mime_type="image/png")
+            image_prompt
         )
 
         image_part = response.parts[0]
         image_bytes = image_part.inline_data.data
         img = Image.open(BytesIO(image_bytes))
+
 
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
