@@ -1,4 +1,4 @@
-# main.py - VERSION 5.1.0 - PRO
+# main.py - VERSION 5.1.1
 import os
 import uuid
 import textwrap
@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
 
 # --- Configuration ---
-app = FastAPI(title="JobpilotAI API", version="5.1.0 - Pro")
+app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # Gemini Config
@@ -45,22 +45,46 @@ except Exception as e:
     print(f"⚠️ Polices Poppins non trouvées. Erreur: {e}")
 
 
-# --- Modèles Pydantic ---
-class LineItem(BaseModel): description: str; price: str
-class DevisRequest(BaseModel): type: str; client: str; artisan: str; date: str; items: List[LineItem]
-class PromoRequest(BaseModel): nom: str; promo: str; date: str
-class ChatRequest(BaseModel): message: str
-class FeedbackRequest(BaseModel): message: str; response: str; rating: str
+# --- Modèles Pydantic (TOUS REGROUPÉS ICI) ---
+class LineItem(BaseModel):
+    description: str
+    price: str
+
+class DevisRequest(BaseModel):
+    type: str
+    client: str
+    artisan: str
+    date: str
+    items: List[LineItem]
+
+class MessageRequest(BaseModel): # <-- LA CLASSE MANQUANTE A ÉTÉ AJOUTÉE
+    nom: str
+    metier: str
+    service: str
+    offre: str
+
+class PromoRequest(BaseModel):
+    nom: str
+    promo: str
+    date: str
+
+class ChatRequest(BaseModel):
+    message: str
+
+class FeedbackRequest(BaseModel):
+    message: str
+    response: str
+    rating: str
 
 
-# --- Endpoints ---
+# --- Endpoints (TOUS REGROUPÉS ICI) ---
 
 @app.get("/", tags=["Status"])
-def read_root(): return {"message": "API JobpilotAI v5.1 - Version de Présentation"}
+def read_root():
+    return {"message": "API JobpilotAI v5.1 - Version de Présentation"}
 
 @app.post("/generate-devis", tags=["Générateurs"], response_class=FileResponse)
 async def generate_devis(req: DevisRequest):
-    # ... (La logique du devis reste la même, elle est déjà excellente) ...
     pdf_id = f"doc_{uuid.uuid4()}.pdf"
     pdf_path = os.path.join(PDF_DIR, pdf_id)
     c = canvas.Canvas(pdf_path, pagesize=A4); width, height = A4
@@ -81,98 +105,47 @@ async def generate_devis(req: DevisRequest):
     c.showPage(); c.save()
     return FileResponse(path=pdf_path, media_type='application/pdf', filename=f"{req.type}_{req.client}.pdf")
 
-@app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
-async def generate_promo_image(req: PromoRequest):
-    if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
-        
-    # --- 1. Préparation du Texte (Contrôle et Fiabilité) ---
-    # On construit le texte principal nous-mêmes pour éviter qu'il soit coupé.
-    main_offer_text = req.promo.upper()
-    
-    # On utilise l'IA uniquement pour un slogan créatif !
-    prompt = f"""Crée un slogan court et percutant (3-5 mots max) pour une promotion sur : '{req.promo}'."""
-    try:
-        response = text_model.generate_content(prompt)
-        tagline = response.text.strip().replace('"', '')
-    except Exception:
-        tagline = "Ne manquez pas cette occasion !"
-
-    # --- 2. Préparation du Fond d'Affiche ---
-    img_id = f"promo_{uuid.uuid4()}.png"
-    img_path = os.path.join(IMG_DIR, img_id)
-    try:
-        img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
-    except FileNotFoundError:
-        img = Image.new('RGB', (1080, 1080), color='#4F46E5') # Un beau fond indigo en secours
-
-    if img.mode != 'RGBA': img = img.convert('RGBA')
-    # Ajout d'un filtre sombre pour que le texte blanc soit bien lisible
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 140)) # Noir à ~55% d'opacité
-    img = Image.alpha_composite(img, overlay)
-    draw = ImageDraw.Draw(img)
-
-    # --- 3. Création du QR Code ---
-    # METTEZ ICI UN VRAI NUMÉRO DE TÉLÉPHONE AU FORMAT INTERNATIONAL
-    whatsapp_number = "2250556383000" 
-    qr_data = f"https://wa.me/{whatsapp_number}?text=Bonjour, je suis intéressé(e) par votre promotion '{req.promo}'."
-    qr = qrcode.QRCode(box_size=8, border=2)
-    qr.add_data(qr_data)
-    qr_img = qr.make_image(fill_color="white", back_color="transparent").convert('RGBA')
-    
-    # --- 4. Composition de l'Affiche (Dessin) ---
-    try:
-        font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 150)
-        font_medium = ImageFont.truetype("font/Poppins-Regular.ttf", 70)
-        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50)
-        font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
-    except IOError:
-        font_heavy, font_medium, font_tagline, font_light = [ImageFont.load_default()]*4
-
-    # Titre en haut
-    draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_medium, fill='white', anchor='mm', align='center')
-    
-    # Offre principale au centre
-    draw.text((540, 450), "\n".join(textwrap.wrap(main_offer_text, width=15)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
-    
-    # Slogan IA en dessous
-    draw.text((540, 620), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
-
-    # Footer
-    draw.line([(50, 880), (1030, 880)], fill="white", width=2)
-    draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
-
-    # Placer le QR Code
-    img.paste(qr_img, (50, 50), qr_img)
-    draw.text((qr_img.width + 70, 90), "Scannez-moi !", font=font_light, fill='white', anchor='lm')
-
-    img = img.convert("RGB")
-    img.save(img_path)
-    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
-
-# ... (Les endpoints /generate-message, /chat, et /log-feedback restent les mêmes que la version 4.2.0) ...
 @app.post("/generate-message", tags=["Générateurs"])
 async def generate_message(req: MessageRequest):
     if not text_model: return {"message_text": f"Promo chez {req.nom}: {req.service} ! {req.offre}. Contactez-nous !"}
     prompt = f"""Tu es un expert en marketing digital en contexte Ivoirien pour les petites entreprises africaines. Rédige un message et percutant pour une publication WhatsApp et Facebook. Soit persuasif, libre et créatif. Le ton doit être joyeux, professionnel et donner envie. - Artisan: {req.nom} ({req.metier}) - Service/Produit: {req.service} - Offre Spéciale: {req.offre}. Termine par un appel à l'action clair. Utilise 2-3 emojis pertinents. ✨📞🎉"""
     response = text_model.generate_content(prompt); return {"message_text": response.text}
 
+@app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
+async def generate_promo_image(req: PromoRequest):
+    if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
+    main_offer_text = req.promo.upper()
+    prompt = f"""Crée un slogan court et percutant (3-5 mots max) pour une promotion sur : '{req.promo}'."""
+    try:
+        response = text_model.generate_content(prompt)
+        tagline = response.text.strip().replace('"', '')
+    except Exception:
+        tagline = "Ne manquez pas cette occasion !"
+    img_id = f"promo_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
+    try:
+        img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
+    except FileNotFoundError:
+        img = Image.new('RGB', (1080, 1080), color='#4F46E5')
+    if img.mode != 'RGBA': img = img.convert('RGBA')
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 140)); img = Image.alpha_composite(img, overlay)
+    draw = ImageDraw.Draw(img)
+    whatsapp_number = "2250556383000"; qr_data = f"https://wa.me/{whatsapp_number}?text=Bonjour, je suis intéressé(e) par votre promotion '{req.promo}'."; qr = qrcode.QRCode(box_size=8, border=2); qr.add_data(qr_data); qr_img = qr.make_image(fill_color="white", back_color="transparent").convert('RGBA')
+    try:
+        font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 150); font_medium = ImageFont.truetype("font/Poppins-Regular.ttf", 70); font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50); font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+    except IOError:
+        font_heavy, font_medium, font_tagline, font_light = [ImageFont.load_default()]*4
+    draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_medium, fill='white', anchor='mm', align='center')
+    draw.text((540, 450), "\n".join(textwrap.wrap(main_offer_text, width=15)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
+    draw.text((540, 620), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
+    draw.line([(50, 880), (1030, 880)], fill="white", width=2); draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
+    img.paste(qr_img, (50, 50), qr_img); draw.text((qr_img.width + 70, 90), "Scannez-moi !", font=font_light, fill='white', anchor='lm')
+    img = img.convert("RGB"); img.save(img_path)
+    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
+
 @app.post("/chat", tags=["Assistant IA"])
 async def handle_chat(req: ChatRequest):
     if not text_model: return {"reply": "Désolé, service IA indisponible."}
-    prompt = f"""Tu es "JobpilotAI", un assistant IA expert, maîtrisant le marketing digital et le copywriting; amical et encourageant, conçu spécifiquement pour les artisans et petits entrepreneurs en Afrique.
-
-Ton rôle est de fournir des conseils pratiques, pertinents et des idées créatives. Tu peux :
-- Aider à trouver des slogans publicitaires percutants.
-- Rédiger des messages professionnels pour des clients (remerciements, relances, annonces, publications).
-- Donner des idées de promotions ou de nouveaux services.
-- Proposer des stratégies simples pour améliorer la visibilité sur les réseaux sociaux.
-- Aider à structurer des devis ou des factures.
-
-Règles importantes :
-1. Ton ton doit être simple, positif et facile à comprendre.
-2. Utilise des emojis de manière pertinente pour rendre la conversation plus vivante. ✨👍
-3. Si on te pose une question hors de ton domaine (politique, science, etc.), réponds poliment que tu es spécialisé dans l'aide aux entrepreneurs et propose de revenir au sujet.
-4. Garde tes réponses concises et directes. Question: "{req.message}". Réponse:"""
+    prompt = f"""Tu es "JobpilotAI", un assistant IA expert, maîtrisant le marketing digital et le copywriting; amical et encourageant, conçu spécifiquement pour les artisans et petits entrepreneurs en Afrique. Ton rôle est de fournir des conseils pratiques, pertinents et des idées créatives. Tu peux : - Aider à trouver des slogans publicitaires percutants. - Rédiger des messages professionnels pour des clients (remerciements, relances, annonces, publications). - Donner des idées de promotions ou de nouveaux services. - Proposer des stratégies simples pour améliorer la visibilité sur les réseaux sociaux. - Aider à structurer des devis ou des factures. Règles importantes : 1. Ton ton doit être simple, positif et facile à comprendre. 2. Utilise des emojis de manière pertinente pour rendre la conversation plus vivante. ✨👍 3. Si on te pose une question hors de ton domaine (politique, science, etc.), réponds poliment que tu es spécialisé dans l'aide aux entrepreneurs et propose de revenir au sujet. 4. Garde tes réponses concises et directes. Question: "{req.message}". Réponse:"""
     try: response = text_model.generate_content(prompt); return {"reply": response.text}
     except Exception as e: print(f"❌ Erreur Gemini: {e}"); return {"reply": "Oups, une erreur est survenue."}
 
