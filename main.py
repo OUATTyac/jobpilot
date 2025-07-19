@@ -164,7 +164,7 @@ async def generate_promo_image(req: PromoRequest):
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la génération de l'image.")
 
-except Exception as e:
+   except Exception as e:
         # 3. MÉTHODE DE SECOURS (Fallback avec Pillow)
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         print("🎨 Passage à la méthode de secours (Pillow).")
