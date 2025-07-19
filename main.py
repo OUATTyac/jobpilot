@@ -129,6 +129,8 @@ async def generate_promo_image(req: PromoRequest):
         image_part = response.candidates[0].content.parts[0]
         image_bytes = image_part.inline_data.data
         img = Image.open(BytesIO(image_bytes))
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
 
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
