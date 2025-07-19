@@ -120,7 +120,7 @@ async def generate_message(req: MessageRequest):
     response = text_model.generate_content(prompt); return {"message_text": response.text}
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
-async def generate_promo-image(req: PromoRequest):
+async def generate_promo_image(req: PromoRequest):
     if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
         
     # 1. Générer un prompt en ANGLAIS pour le modèle d'image
