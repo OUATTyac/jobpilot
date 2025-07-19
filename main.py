@@ -66,7 +66,8 @@ class MessageRequest(BaseModel): # <-- LA CLASSE MANQUANTE A ÉTÉ AJOUTÉE
 
 class PromoRequest(BaseModel):
     nom: str
-    promo: str
+    product: str # On attend "product"
+    price: str   # On attend "price"
     date: str
 
 class ChatRequest(BaseModel):
