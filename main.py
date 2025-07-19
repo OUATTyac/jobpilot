@@ -64,7 +64,7 @@ class PromoRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Bienvenue sur l’API JobpilotAI V2 🚀 - Prête pour le hackathon !"}
+    return {"message": "Bienvenue sur l’API JobpilotAI 🚀 - Prête pour le hackathon !"}
 
 @app.post("/generate-devis", response_class=FileResponse)
 async def generate_devis(req: DevisRequest):
@@ -152,3 +152,37 @@ async def generate_promo_image(req: PromoRequest):
     img.save(img_path)
 
     return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
+    
+@app.post("/chat", tags=["Assistant IA"])
+async def handle_chat(req: ChatRequest):
+    """Gère la conversation avec l'assistant IA."""
+    if not model:
+        return {"reply": "Désolé, le service IA est actuellement indisponible."}
+
+    prompt = f"""
+    Tu es "JobpilotAI", un assistant IA expert, amical et encourageant, conçu spécifiquement pour les artisans et petits entrepreneurs en Afrique.
+    
+    Ton rôle est de fournir des conseils pratiques et des idées créatives. Tu peux :
+    - Aider à trouver des slogans publicitaires percutants.
+    - Rédiger des messages professionnels pour des clients (remerciements, relances, annonces).
+    - Donner des idées de promotions ou de nouveaux services.
+    - Proposer des stratégies simples pour améliorer la visibilité sur les réseaux sociaux.
+    - Aider à structurer des devis ou des factures.
+
+    Règles importantes :
+    1. Ton ton doit être simple, positif et facile à comprendre.
+    2. Utilise des emojis de manière pertinente pour rendre la conversation plus vivante. ✨👍
+    3. Si on te pose une question hors de ton domaine (politique, science, etc.), réponds poliment que tu es spécialisé dans l'aide aux entrepreneurs et propose de revenir au sujet.
+    4. Garde tes réponses concises et directes.
+
+    Voici la question de l'artisan : "{req.message}"
+
+    Ta réponse :
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        return {"reply": response.text}
+    except Exception as e:
+        print(f"❌ Erreur lors de l'appel à Gemini: {e}")
+        return {"reply": "Oups, quelque chose s'est mal passé. Pourriez-vous reformuler votre question ?"}
