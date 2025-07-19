@@ -91,19 +91,35 @@ async def generate_devis(req: DevisRequest):
 
     return FileResponse(path=pdf_path, media_type='application/pdf', filename=f"Devis_{req.client}.pdf")
 
-@app.post("/generate-message")
+@app.post("/generate-message", tags=["Générateurs"])
 async def generate_message(req: MessageRequest):
-    if not model:
-        return {"message_text": "Erreur: L'API IA n'est pas configurée."}
-        
-    prompt = f"""
-    Tu es JobpilotAI, un assistant pour artisans africains. Rédige un message WhatsApp court, amical et percutant en français simple.
-    Utilise un ou deux emojis pertinents.
-    - Artisan: {req.nom} ({req.metier})
-    - Service: {req.service}
-    - Offre: {req.offre}
-    Rédige uniquement le message pour le client.
     """
+    Génère un message WhatsApp et Facebook promotionnel percutant à l’aide de l’IA.
+    """
+    if not req.nom or not req.metier or not req.service or not req.offre:
+        raise HTTPException(status_code=400, detail="Tous les champs sont requis.")
+
+    if not model:
+        # Fallback sans IA
+        return {
+            "message_text": f"🔥 Promo chez {req.nom} ({req.metier}) : {req.service} à saisir ! {req.offre} 📞 Contactez-le ! (Sans IA)"
+        }
+        
+     prompt = f"""
+Tu es JobpilotAI, l'assistant d’artisans et petit entrepreneurs africains.
+Génère un message marketing WhatsApp et Facebook **en français simple, direct et convaincant**.
+
+🎯 Objectif : Attirer un client en 1 message.
+📱 Format : WhatsApp, avec 1 ou 2 emojis.
+💼 Artisan : {req.nom}, {req.metier}
+🛠️ Service : {req.service}
+🎁 Offre : {req.offre}
+
+❗ Ne parle pas à la 3ᵉ personne, utilise « je » ou « nous » si pertinent.
+✅ Fais une phrase courte, engageante et chaleureuse.
+
+✏️ Message :
+"""
     response = model.generate_content(prompt)
     return {"message_text": response.text}
 
