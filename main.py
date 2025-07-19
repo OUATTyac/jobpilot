@@ -121,10 +121,15 @@ async def generate_message(req: MessageRequest):
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
-    if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
-        
-    # 1. Générer un prompt en ANGLAIS pour le modèle d'image
-    prompt_for_image_prompt = f"A vibrant, high-quality, professional advertising poster. The style is modern African aesthetic. The poster is for a promotion. Product: '{req.product}' at '{req.price} FCFA'. Include keywords like 'product photography', 'vibrant colors', 'clean background', 'handcrafted'."
+    if not text_model:
+        raise HTTPException(status_code=503, detail="Service IA indisponible.")
+
+    # 1. Générer un prompt pour l’image
+    prompt_for_image_prompt = f"""
+    Create a short, detailed prompt for a vibrant, modern African-style promotional poster.
+    Highlight this product: {req.product} priced at {req.price} FCFA.
+    Use concepts like 'product photography', 'colorful background', 'clean composition'.
+    """
     try:
         image_prompt_response = text_model.generate_content(prompt_for_image_prompt)
         image_prompt = image_prompt_response.text.strip().replace('"', '')
@@ -132,23 +137,24 @@ async def generate_promo_image(req: PromoRequest):
     except Exception:
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
-    # 2. Tenter la génération d'image native avec Imagen
+    # 2. Génération avec Imagen
     try:
-        print("🚀 Tentative de génération d'image avec Imagen...")
-        client = genai.Client() # Utilise la clé API configurée globalement
-        response = client.models.generate_images(
-            model='imagen-3.0-generate-002', # Modèle de la documentation
-            prompt=image_prompt,
-            config=types.GenerateImagesConfig(number_of_images=1)
+        print("🚀 Génération avec Imagen...")
+        image_model = genai.GenerativeModel("imagen-3.0")
+        response = image_model.generate_content(
+            image_prompt,
+            generation_config=types.GenerationConfig(response_mime_type="image/png")
         )
-        
-        generated_pil_image = response.generated_images[0].image
-        print("✅ Image générée avec succès par Imagen.")
-        
+
+        image_part = response.parts[0]
+        image_bytes = image_part.inline_data.data
+        img = Image.open(BytesIO(image_bytes))
+
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
-        generated_pil_image.save(img_path)
-        
+        img.save(img_path)
+
+        print("✅ Image générée avec succès.")
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
