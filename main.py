@@ -17,6 +17,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
+from google.genai import types
 
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
@@ -119,18 +120,11 @@ async def generate_message(req: MessageRequest):
     response = text_model.generate_content(prompt); return {"message_text": response.text}
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
-async def generate_promo_image(req: PromoRequest):
+async def generate_promo-image(req: PromoRequest):
     if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
         
     # 1. Générer un prompt en ANGLAIS pour le modèle d'image
-    prompt_for_image_prompt = f"""
-    Create a vibrant, high-quality, professional advertising poster prompt for an image generation AI.
-    The style should be a mix of modern African aesthetic and clean design. The poster is for a promotion.
-    Product: '{req.product}'
-    Price: '{req.price} FCFA'
-    Artisan: '{req.nom}'
-    The prompt must be in English. Include keywords like 'product photography', 'vibrant colors', 'clean background'.
-    """
+    prompt_for_image_prompt = f"A vibrant, high-quality, professional advertising poster. The style is modern African aesthetic. The poster is for a promotion. Product: '{req.product}' at '{req.price} FCFA'. Include keywords like 'product photography', 'vibrant colors', 'clean background', 'handcrafted'."
     try:
         image_prompt_response = text_model.generate_content(prompt_for_image_prompt)
         image_prompt = image_prompt_response.text.strip().replace('"', '')
@@ -138,54 +132,55 @@ async def generate_promo_image(req: PromoRequest):
     except Exception:
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
-    # 2. Tenter la génération d'image native avec Imagen 3
+    # 2. Tenter la génération d'image native avec Imagen
     try:
-        print("🚀 Tentative de génération d'image avec Imagen 3...")
-        response = genai.generate_images(
-            model='imagen-3.0-generate-002',
+        print("🚀 Tentative de génération d'image avec Imagen...")
+        client = genai.Client() # Utilise la clé API configurée globalement
+        response = client.models.generate_images(
+            model='imagen-3.0-generate-002', # Modèle de la documentation
             prompt=image_prompt,
+            config=types.GenerateImagesConfig(number_of_images=1)
         )
-        generated_image_data = response.images[0]
-        # On récupère les bytes de l'image. Note: _image_bytes est une propriété interne.
-        img_bytes = generated_image_data._image_bytes
-        img = Image.open(BytesIO(img_bytes))
-        print("✅ Image générée avec succès par Imagen 3.")
+        
+        generated_pil_image = response.generated_images[0].image
+        print("✅ Image générée avec succès par Imagen.")
         
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
-        img.save(img_path)
+        generated_pil_image.save(img_path)
+        
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
-        print(f"⚠️ Erreur de génération d'image Gemini: {e}")
-        print("🎨 Passage à la méthode de secours (Pillow).")
         # --- 3. MÉTHODE DE SECOURS (FALLBACK) ---
-        # Si la génération native échoue, on exécute ce code stable.
-        promo_text_for_fallback = f"{req.product.upper()} À {req.price} FCFA"
+        print(f"⚠️ Erreur de génération d'image Imagen: {e}")
+        print("🎨 Passage à la méthode de secours (Pillow).")
+        promo_text_for_fallback = f"{req.product.upper()}\nÀ {req.price} FCFA"
         tagline = "L'Offre à ne pas Manquer !"
         
         img_id = f"promo_fallback_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
         try:
-            img = Image.open("font/background.jpg").resize((1080, 1080), Image.Resampling.LANCZOS)
+            img = Image.open("font/background.jpg").resize((3000, 3000), Image.Resampling.LANCZOS)
         except FileNotFoundError:
-            img = Image.new('RGB', (1080, 1080), color='#4F46E5')
+            img = Image.new('RGB', (3000, 3000), color='#4F46E5')
 
         if img.mode != 'RGBA': img = img.convert('RGBA')
         overlay = Image.new('RGBA', img.size, (0, 0, 0, 160)); img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img)
 
         try:
-            font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 150)
-            font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 50)
-            font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+            font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 130)
+            font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
+            font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 40)
         except IOError:
             font_heavy, font_tagline, font_light = [ImageFont.load_default()]*3
 
-        draw.text((540, 480), "\n".join(textwrap.wrap(promo_text_for_fallback, width=15)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
-        draw.text((540, 650), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
+        draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_tagline, fill='white', anchor='mm', align='center')
+        draw.text((540, 480), "\n".join(textwrap.wrap(promo_text_for_fallback, width=18)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
+        draw.text((540, 700), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
         draw.line([(50, 880), (1030, 880)], fill="white", width=2)
         draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
-
+        
         img = img.convert("RGB"); img.save(img_path)
         return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
 
