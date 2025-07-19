@@ -125,7 +125,7 @@ async def generate_promo_image(req: PromoRequest):
     if not text_model:
         raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    # 1. Générer un prompt pour l’image
+    # 1. Générer un prompt en anglais pour l’image
     prompt_for_image_prompt = f"""
     Create a short, detailed prompt for a vibrant, modern African-style promotional poster.
     Highlight this product: {req.product} priced at {req.price} FCFA.
@@ -138,10 +138,9 @@ async def generate_promo_image(req: PromoRequest):
     except Exception:
         image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
 
-    # 2. Génération avec Imagen
+    # 2. Génération avec Imagen (ou fallback Pillow)
     try:
         print("🚀 Génération avec Imagen...")
-
         image_model = genai.GenerativeModel("models/imagen-3")
 
         response = image_model.generate_content(
@@ -161,11 +160,7 @@ async def generate_promo_image(req: PromoRequest):
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
-        print(f"⚠️ Erreur de génération d'image Imagen: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de la génération de l'image.")
-
-   except Exception as e:
-        # 3. MÉTHODE DE SECOURS (Fallback avec Pillow)
+        # 3. Fallback avec Pillow
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         print("🎨 Passage à la méthode de secours (Pillow).")
 
@@ -204,6 +199,7 @@ async def generate_promo_image(req: PromoRequest):
         img.save(img_path)
 
         return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
+
 
 
 @app.post("/chat", tags=["Assistant IA"])
