@@ -140,7 +140,7 @@ async def generate_promo_image(req: PromoRequest):
     # 2. Génération avec Imagen (ou fallback Pillow)
     try:
         print("🚀 Génération avec Imagen...")
-        image_model = genai.GenerativeModel("models/imagen-3")
+        image_model = genai.GenerativeModel("imagen-3.0-generate-002")
 
         response = image_model.generate_content(
             image_prompt
