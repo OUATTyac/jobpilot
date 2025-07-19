@@ -83,54 +83,61 @@ async def generate_devis(req: DevisRequest):
 @app.post("/generate-message", tags=["Générateurs"])
 async def generate_message(req: MessageRequest):
     if not text_model: return {"message_text": f"Promo chez {req.nom}: {req.service} ! {req.offre}. Contactez-nous !"}
-    prompt = f"""Tu es un expert en marketing digital pour les petites entreprises africaines. Rédige un message court et percutant pour une publication WhatsApp et Facebook. Ne te contente pas du modèle, soit créatif. Le ton doit être joyeux, professionnel et donner envie. - Artisan: {req.nom} ({req.metier}) - Service/Produit: {req.service} - Offre Spéciale: {req.offre}. Termine par un appel à l'action clair. Utilise 2-3 emojis pertinents. ✨📞🎉"""
+    prompt = f"""Tu es un expert en marketing digital pour les petites entreprises africaines. Rédige un message court et percutant pour une publication WhatsApp et Facebook. Ne te contente pas du modèle, soit créatif, utilise les techniques de copywriting et le contexte ivoirien. Le ton doit être joyeux, professionnel et donner envie. - Artisan: {req.nom} ({req.metier}) - Service/Produit: {req.service} - Offre Spéciale: {req.offre}. Termine par un appel à l'action clair. Utilise 2-3 emojis pertinents. ✨📞🎉"""
     response = text_model.generate_content(prompt)
     return {"message_text": response.text}
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
-    if not text_model:
+    if not image_client or not text_model:
         raise HTTPException(status_code=503, detail="Le service IA n'est pas configuré.")
-        
-    promo_text = "Offre Spéciale !"
-    prompt = f"""Crée une accroche marketing très courte (5-10 mots max) pour cette promotion : Artisan: {req.nom}, Promotion: {req.promo}, Fin: {req.date}. Rédige uniquement l'accroche."""
-    try:
-        response = text_model.generate_content(prompt)
-        promo_text = response.text.strip().replace('"', '')
-    except Exception as e:
-        print(f"Erreur génération texte pour affiche: {e}")
-    
-    img_id = f"promo_{uuid.uuid4()}.png"
-    img_path = os.path.join(IMG_DIR, img_id)
-    
-    try:
-        img = Image.open("font/background.jpg")
-    except FileNotFoundError:
-        print("⚠️ background.jpg non trouvé, utilisation d'un fond jaune.")
-        img = Image.new('RGB', (1080, 1080), color='#FFD700')
 
-    if img.mode != 'RGBA':
-        img = img.convert('RGBA')
-    
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 128))
-    img = Image.alpha_composite(img, overlay)
-    draw = ImageDraw.Draw(img)
+    # 1. Générer un prompt en ANGLAIS pour l'image
+    prompt_for_image_prompt = f"""Create a short, descriptive, vibrant, and optimistic advertising poster prompt
+for an image generation AI. The style should be modern African. The ad is for '{req.promo}'."""
     
     try:
-        title_font = ImageFont.truetype("font/Poppins-Bold.ttf", 110)
-        subtitle_font = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
-        promo_font = ImageFont.truetype("font/Poppins-Bold.ttf", 70)
-    except IOError:
-        title_font, subtitle_font, promo_font = ImageFont.load_default(), ImageFont.load_default(), ImageFont.load_default()
-    
-    draw.text((540, 400), "\n".join(textwrap.wrap(promo_text, width=20)), font=title_font, fill='white', anchor='mm', align='center')
-    draw.text((540, 600), f"Chez {req.nom}", font=subtitle_font, fill='#FFD700', anchor='mm', align='center')
-    draw.text((540, 100), "✨ PROMO SPÉCIALE ✨", font=promo_font, fill='white', anchor='ms', align='center')
-    draw.text((540, 980), f"Valable jusqu'au {req.date}", font=subtitle_font, fill='white', anchor='ms', align='center')
-    
-    img = img.convert("RGB")
-    img.save(img_path)
-    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
+        image_prompt_response = text_model.generate_content(prompt_for_image_prompt)
+        image_prompt = image_prompt_response.text.strip().replace('"', '')
+        print(f"🖼️ Prompt pour l'image: {image_prompt}")
+    except Exception as e:
+        print(f"⚠️ Erreur lors de la génération du prompt texte : {e}")
+        image_prompt = f"Vibrant promotional poster for an African artisan, for a promotion about {req.promo}"
+
+    # 2. Générer l'image avec Gemini
+    try:
+        response = image_client.models.generate_content(
+            model="gemini-2.0-flash-preview-image-generation",
+            contents=image_prompt,
+            config=types.GenerateContentConfig(response_modalities=["IMAGE"])
+        )
+
+        image_part = response.candidates[0].content.parts[0]
+        image_bytes = image_part.inline_data.data
+
+        img = Image.open(BytesIO(image_bytes))
+
+        # ✅ Convertir au bon mode si nécessaire
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+
+        # ✅ Ajouter un overlay semi-transparent (ex: effet visuel, future zone de texte)
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 80))  # noir transparent
+        img = Image.alpha_composite(img, overlay)
+
+        # (Optionnel) Ajouter texte ici avec ImageDraw si souhaité...
+
+        # ✅ Sauvegarde
+        img_id = f"promo_{req.nom}_{uuid.uuid4().hex[:8]}.png"
+        img_path = os.path.join(IMG_DIR, img_id)
+        img.convert("RGB").save(img_path, format="PNG")
+
+        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_{req.nom}.png")
+
+    except Exception as e:
+        print(f"❌ Erreur de génération d'image Gemini: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération de l'image : {e}")
+
 
 @app.post("/chat", tags=["Assistant IA"])
 async def handle_chat(req: ChatRequest):
