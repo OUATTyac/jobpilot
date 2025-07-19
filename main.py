@@ -35,7 +35,7 @@ try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('models/gemini-1.5-pro')
         print("✅ Gemini API configurée avec succès.")
     else:
         print("⚠️  Avertissement: La variable d'environnement GEMINI_API_KEY n'est pas définie.")
