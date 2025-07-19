@@ -11,6 +11,7 @@ import qrcode
 from io import BytesIO
 
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -26,7 +27,7 @@ text_model = None
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('gemini-2.5-pro')
+        genai.configure(api_key=api_key); text_model = genai.GenerativeModel('models/gemini-2.5-flash')
         print("✅ Gemini API (texte) configurée.")
     else:
         print("⚠️ GEMINI_API_KEY non définie.")
