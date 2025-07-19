@@ -18,6 +18,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
 from google.generativeai import types
+from google.generativeai.types import Content, Part, GenerationConfig
 
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
@@ -139,24 +140,26 @@ async def generate_promo_image(req: PromoRequest):
 
     # 2. Génération avec Imagen
     try:
-        print("🚀 Génération avec Imagen...")
-        image_model = genai.GenerativeModel("imagen-3")
+    print("🚀 Génération avec Imagen...")
 
-        response = image_model.generate_content(
-            image_prompt,
-            response_mime_type="image/png"
-        )
+    # Construire correctement la requête d’image
+    image_model = genai.GenerativeModel("models/imagen-3")
 
-        image_part = response.parts[0]
-        image_bytes = image_part.inline_data.data
-        img = Image.open(BytesIO(image_bytes))
+    response = image_model.generate_content(
+        contents=[Content(parts=[Part(text=image_prompt)])],
+        generation_config=GenerationConfig(response_mime_type="image/png")
+    )
 
-        img_id = f"promo_ai_{uuid.uuid4()}.png"
-        img_path = os.path.join(IMG_DIR, img_id)
-        img.save(img_path)
+    image_part = response.parts[0]
+    image_bytes = image_part.inline_data.data
+    img = Image.open(BytesIO(image_bytes))
 
-        print("✅ Image générée avec succès.")
-        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
+    img_id = f"promo_ai_{uuid.uuid4()}.png"
+    img_path = os.path.join(IMG_DIR, img_id)
+    img.save(img_path)
+
+    print("✅ Image générée avec succès.")
+    return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
         # 3. MÉTHODE DE SECOURS (Fallback avec Pillow)
