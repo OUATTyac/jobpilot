@@ -15,7 +15,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
-from google import genai
 from io import BytesIO
 
 # --- Configuration ---
