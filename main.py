@@ -17,7 +17,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
-from google.genai import types
+from google.generativeai import types
 
 # --- Configuration ---
 app = FastAPI(title="JobpilotAI API", version="5.1.1 - Pro")
