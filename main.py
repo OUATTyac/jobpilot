@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
 
 # --- Configuration ---
-app = FastAPI(title="JobpilotAI API",")
+app = FastAPI(title="JobpilotAI API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # --- Initialisation Gemini ---
