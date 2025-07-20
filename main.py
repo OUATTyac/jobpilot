@@ -157,10 +157,6 @@ Text: 'Chez {req.nom}' and the price."""
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
-        print(f"⚠️ Erreur de génération d'image Gemini: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur Gemini : {e}")
-
-    except Exception as e:
         # 3. Fallback avec Pillow
         print(f"⚠️ Erreur de génération d'image Imagen: {e}")
         print("🎨 Passage à la méthode de secours (Pillow).")
@@ -172,9 +168,9 @@ Text: 'Chez {req.nom}' and the price."""
         img_path = os.path.join(IMG_DIR, img_id)
 
         try:
-            img = Image.open("font/background.jpg").resize((2000, 3000), Image.Resampling.LANCZOS)
+            img = Image.open("font/background.jpg").resize((2000, 2500), Image.Resampling.LANCZOS)
         except FileNotFoundError:
-            img = Image.new('RGB', (3000, 3000), color='#4F46E5')
+            img = Image.new('RGB', (2000, 2500), color='#4F46E5')
 
         if img.mode != 'RGBA':
             img = img.convert('RGBA')
