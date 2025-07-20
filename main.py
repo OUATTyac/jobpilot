@@ -128,22 +128,23 @@ async def generate_promo_image(req: PromoRequest):
     if not text_model:
         raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    prompt = f"""A vibrant, modern African-style promotional poster for {req.product}.
-Use product photography, clean composition, colorful African patterns.
-Highlight the price: {req.price} FCFA. Include 'Chez {req.nom}' in the layout."""
-
+    prompt = f"""Create a vibrant, modern African-style promotional poster.
+Product: {req.product}, Price: {req.price} FCFA.
+Focus: product photography, clean composition, abstract African patterns.
+Text: 'Chez {req.nom}' and the price."""
+    
     try:
         print("🚀 Génération avec Gemini...")
 
         model = genai.GenerativeModel("gemini-2.0-flash-preview-image-generation")
         response = model.generate_content(
             prompt,
-            generation_config=genai.types.GenerationConfig(response_mime_type="image/png")
+            generation_config=genai.GenerationConfig()
         )
 
         image_part = next((part for part in response.parts if part.inline_data), None)
         if not image_part:
-            raise ValueError("Pas d'image retournée par Gemini.")
+            raise ValueError("❌ Aucune image générée.")
 
         image_bytes = image_part.inline_data.data
         img = Image.open(BytesIO(image_bytes))
@@ -152,12 +153,12 @@ Highlight the price: {req.price} FCFA. Include 'Chez {req.nom}' in the layout.""
         img_path = os.path.join(IMG_DIR, img_id)
         img.save(img_path)
 
-        print("✅ Image enregistrée :", img_path)
+        print(f"✅ Image générée et sauvegardée : {img_path}")
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
         print(f"⚠️ Erreur de génération d'image Gemini: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur Gemini : {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur Gemini : {e}")
 
     except Exception as e:
         # 3. Fallback avec Pillow
