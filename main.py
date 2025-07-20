@@ -122,77 +122,51 @@ async def generate_message(req: MessageRequest):
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
-    if not text_model:
-        raise HTTPException(status_code=503, detail="Service IA indisponible.")
+    if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    # 1. Préparation du Texte et du Slogan par l'IA
-    main_offer_text = req.product.upper()
-    price_text = f"À SEULEMENT {req.price} FCFA"
-    prompt = f"""Crée un slogan court, percutant et élégant (3-5 mots max) pour une promotion sur des '{req.product}'. Soit créatif et persuasif."""
+    # --- PROMPT ULTRA-PRÉCIS POUR LE SLOGAN ---
+    prompt = f"""Crée UN SEUL slogan court et percutant (3-5 mots max) pour une promotion sur des '{req.product}'. Rédige UNIQUEMENT le slogan, sans aucune phrase d'introduction comme "Voici un slogan". Exemple: 'Le style à vos pieds'."""
     try:
         response = text_model.generate_content(prompt)
-        tagline = response.text.strip().replace('"', '')
+        tagline = response.text.strip().replace('"', '').replace('*', '')
     except Exception:
         tagline = "L'Offre à ne pas Manquer !"
 
-    # 2. Création de l'Image de Fond
-    img_id = f"promo_pro_{uuid.uuid4()}.png"
-    img_path = os.path.join(IMG_DIR, img_id)
-    width, height = 2000, 2000
+    img_id = f"promo_pro_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
+    width, height = 1080, 1080
     try:
-        # On essaie de charger l'image de fond en bois que vous avez fournie
         background = Image.open("font/background.jpg").resize((width, height), Image.Resampling.LANCZOS)
     except FileNotFoundError:
-        print("⚠️ background.jpg non trouvé. Utilisation d'un dégradé.")
-        # Superbe dégradé en fallback, beaucoup plus pro qu'une couleur unie
         background = Image.new("RGB", (width, height))
-        draw = ImageDraw.Draw(background)
+        draw_bg = ImageDraw.Draw(background)
         for i in range(height):
-            # Dégradé du bleu nuit au violet
-            color = (
-                int(20 + (i / height) * 30), # R
-                int(20 + (i / height) * 20), # G
-                int(80 + (i / height) * 60)  # B
-            )
-            draw.line([(0, i), (width, i)], fill=color)
+            color = (int(20 + (i / height) * 30), int(20 + (i / height) * 20), int(80 + (i / height) * 60))
+            draw_bg.line([(0, i), (width, i)], fill=color)
 
     if background.mode != 'RGBA': background = background.convert('RGBA')
     
-    # 3. Création d'une toile transparente pour les textes
     txt_layer = Image.new('RGBA', background.size, (255, 255, 255, 0))
     draw = ImageDraw.Draw(txt_layer)
 
-    # 4. Chargement des polices
     try:
-        font_main = ImageFont.truetype("font/Poppins-Bold.ttf", 140)
-        font_price = ImageFont.truetype("font/Poppins-Bold.ttf", 100)
-        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
-        font_footer = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+        font_main = ImageFont.truetype("font/Poppins-Bold.ttf", 150)
+        font_price = ImageFont.truetype("font/Poppins-Bold.ttf", 120)
+        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 70)
+        font_footer = ImageFont.truetype("font/Poppins-Regular.ttf", 40)
     except IOError:
         font_main, font_price, font_tagline, font_footer = [ImageFont.load_default()]*4
 
-    # 5. Dessin des éléments graphiques et du texte
-    
-    # Bandeau "PROMO SPÉCIALE"
-    draw.rectangle([(0, 100), (width, 200)], fill="#FFD700")
+    # --- NOUVEAU DESIGN PROFESSIONNEL ---
+    draw.rectangle([(0, 80), (width, 220)], fill="#FFD700")
     draw.text((width/2, 150), "PROMO SPÉCIALE", font=font_tagline, fill="black", anchor="mm")
 
-    # Texte principal de l'offre
-    draw.text((width/2, 400), "\n".join(textwrap.wrap(main_offer_text, width=15)), font=font_main, fill="white", anchor="mm", align="center", stroke_width=3, stroke_fill="black")
+    draw.text((width/2, 400), "\n".join(textwrap.wrap(req.product.upper(), width=15)), font=font_main, fill="white", anchor="mm", align="center", stroke_width=4, stroke_fill="black")
+    draw.text((width/2, 600), f"À {req.price} FCFA", font=font_price, fill="#FFD700", anchor="mm", align="center")
+    draw.text((width/2, 750), tagline, font=font_tagline, fill="white", anchor="mm", align="center")
+    
+    draw.text((width/2, 950), f"Chez {req.nom} - Jusqu'au {req.date}", font=font_footer, fill="white", anchor="mm", align="center")
 
-    # Prix
-    draw.text((width/2, 600), price_text, font=font_price, fill="#FFD700", anchor="mm", align="center")
-
-    # Slogan
-    draw.text((width/2, 720), tagline, font=font_tagline, fill="white", anchor="mm", align="center")
-
-    # Footer
-    draw.text((width/2, 950), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_footer, fill="white", anchor="mm", align="center")
-
-    # 6. Fusion de l'image de fond et de la toile de texte
     out = Image.alpha_composite(background, txt_layer)
-
-    # 7. Sauvegarde
     out = out.convert("RGB")
     out.save(img_path)
 
