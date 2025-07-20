@@ -121,43 +121,43 @@ async def generate_message(req: MessageRequest):
 
 router = APIRouter()
 
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))  # ou directement: genai.configure(api_key="ta_clé")
+
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
     if not text_model:
         raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    # 1. Générer un prompt pour Gemini
-    prompt_for_image = f"""A vibrant, modern African-style promotional poster for {req.product}.
-Highlight it with product photography style, colorful background (Ankara or Kente inspired),
-and clean composition. Price: {req.price} FCFA. Show 'Chez {req.nom}' clearly. Professional and studio-quality."""
+    prompt = f"""A vibrant, modern African-style promotional poster for {req.product}.
+Use product photography, clean composition, colorful African patterns.
+Highlight the price: {req.price} FCFA. Include 'Chez {req.nom}' in the layout."""
 
     try:
         print("🚀 Génération avec Gemini...")
-        client = genai.Client()  # Assure-toi que l'API key est bien configurée
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-preview-image-generation",
-            contents=prompt_for_image,
-            config=types.GenerateContentConfig(response_modalities=["IMAGE"])
+        model = genai.GenerativeModel("gemini-2.0-flash-preview-image-generation")
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(response_mime_type="image/png")
         )
 
-        image_part = next(
-            (part for part in response.candidates[0].content.parts if part.inline_data), None
-        )
-        if image_part is None:
-            raise ValueError("Aucune image générée par Gemini")
+        image_part = next((part for part in response.parts if part.inline_data), None)
+        if not image_part:
+            raise ValueError("Pas d'image retournée par Gemini.")
 
-        image = Image.open(BytesIO(image_part.inline_data.data))
+        image_bytes = image_part.inline_data.data
+        img = Image.open(BytesIO(image_bytes))
+
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
-        image.save(img_path)
+        img.save(img_path)
 
-        print("✅ Image générée avec succès.")
+        print("✅ Image enregistrée :", img_path)
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
         print(f"⚠️ Erreur de génération d'image Gemini: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de la génération d'image avec Gemini.")
+        raise HTTPException(status_code=500, detail=f"Erreur Gemini : {str(e)}")
 
     except Exception as e:
         # 3. Fallback avec Pillow
