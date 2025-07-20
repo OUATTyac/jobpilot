@@ -133,7 +133,7 @@ async def generate_promo_image(req: PromoRequest):
         tagline = "L'Offre à ne pas Manquer !"
 
     img_id = f"promo_pro_{uuid.uuid4()}.png"; img_path = os.path.join(IMG_DIR, img_id)
-    width, height = 2000, 2000
+    width, height = 1080, 1080
     try:
         background = Image.open("font/background.jpg").resize((width, height), Image.Resampling.LANCZOS)
     except FileNotFoundError:
