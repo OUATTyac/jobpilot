@@ -2,7 +2,7 @@
 import os
 import uuid
 import textwrap
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -119,44 +119,45 @@ async def generate_message(req: MessageRequest):
     prompt = f"""Tu es un expert en marketing digital en contexte Ivoirien pour les petites entreprises africaines. Rédige un message et percutant pour une publication WhatsApp et Facebook. Soit persuasif, libre et créatif. Le ton doit être joyeux, professionnel et donner envie. - Artisan: {req.nom} ({req.metier}) - Service/Produit: {req.service} - Offre Spéciale: {req.offre}. Termine par un appel à l'action clair. Utilise 2-3 emojis pertinents. ✨📞🎉"""
     response = text_model.generate_content(prompt); return {"message_text": response.text}
 
+router = APIRouter()
+
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
     if not text_model:
         raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    # 1. Générer un prompt en anglais pour l’image
-    prompt_for_image_prompt = f"""
-    Create a short, detailed prompt for a vibrant, modern African-style promotional poster.
-    Highlight this product: {req.product} priced at {req.price} FCFA.
-    Use concepts like 'product photography', 'colorful background', 'clean composition'.
-    """
-    try:
-        image_prompt_response = text_model.generate_content(prompt_for_image_prompt)
-        image_prompt = image_prompt_response.text.strip().replace('"', '')
-        print(f"🖼️ Prompt pour Imagen: {image_prompt}")
-    except Exception:
-        image_prompt = f"Product photography of '{req.product}', vibrant african patterns, professional advertising poster"
+    # 1. Générer un prompt pour Gemini
+    prompt_for_image = f"""A vibrant, modern African-style promotional poster for {req.product}.
+Highlight it with product photography style, colorful background (Ankara or Kente inspired),
+and clean composition. Price: {req.price} FCFA. Show 'Chez {req.nom}' clearly. Professional and studio-quality."""
 
-    # 2. Génération avec Imagen (ou fallback Pillow)
     try:
-        print("🚀 Génération avec Imagen...")
-        image_model = genai.GenerativeModel("models/gemini-2.0-flash-preview-image-generation")
+        print("🚀 Génération avec Gemini...")
+        client = genai.Client()  # Assure-toi que l'API key est bien configurée
 
-        response = image_model.generate_content(
-            image_prompt
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-preview-image-generation",
+            contents=prompt_for_image,
+            config=types.GenerateContentConfig(response_modalities=["IMAGE"])
         )
 
-        image_part = response.parts[0]
-        image_bytes = image_part.inline_data.data
-        img = Image.open(BytesIO(image_bytes))
+        image_part = next(
+            (part for part in response.candidates[0].content.parts if part.inline_data), None
+        )
+        if image_part is None:
+            raise ValueError("Aucune image générée par Gemini")
 
-
+        image = Image.open(BytesIO(image_part.inline_data.data))
         img_id = f"promo_ai_{uuid.uuid4()}.png"
         img_path = os.path.join(IMG_DIR, img_id)
-        img.save(img_path)
+        image.save(img_path)
 
         print("✅ Image générée avec succès.")
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
+
+    except Exception as e:
+        print(f"⚠️ Erreur de génération d'image Gemini: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération d'image avec Gemini.")
 
     except Exception as e:
         # 3. Fallback avec Pillow
@@ -170,7 +171,7 @@ async def generate_promo_image(req: PromoRequest):
         img_path = os.path.join(IMG_DIR, img_id)
 
         try:
-            img = Image.open("font/background.jpg").resize((3000, 3000), Image.Resampling.LANCZOS)
+            img = Image.open("font/background.jpg").resize((2000, 3000), Image.Resampling.LANCZOS)
         except FileNotFoundError:
             img = Image.new('RGB', (3000, 3000), color='#4F46E5')
 
