@@ -157,45 +157,67 @@ Text: 'Chez {req.nom}' and the price."""
         return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
 
     except Exception as e:
-        # 3. Fallback avec Pillow
-        print(f"⚠️ Erreur de génération d'image Imagen: {e}")
-        print("🎨 Passage à la méthode de secours (Pillow).")
+# Fallback avec Pillow
+print("🎨 Passage à la méthode de secours (Pillow).")
 
-        promo_text_for_fallback = f"{req.product.upper()}\nÀ {req.price} FCFA"
-        tagline = "L'Offre à ne pas Manquer !"
+promo_text = f"{req.product.upper()} À {req.price} FCFA"
+tagline = "L'Offre à ne pas Manquer !"
+footer = f"Chez {req.nom} - Valable jusqu'au {req.date}"
 
-        img_id = f"promo_fallback_{uuid.uuid4()}.png"
-        img_path = os.path.join(IMG_DIR, img_id)
+img_id = f"promo_fallback_{uuid.uuid4()}.png"
+img_path = os.path.join(IMG_DIR, img_id)
 
-        try:
-            img = Image.open("font/background.jpg").resize((2000, 2500), Image.Resampling.LANCZOS)
-        except FileNotFoundError:
-            img = Image.new('RGB', (2000, 2500), color='#4F46E5')
+# Taille de l’image
+width, height = 2000, 2500
 
-        if img.mode != 'RGBA':
-            img = img.convert('RGBA')
+# Charger le background s'il existe
+try:
+    img = Image.open("font/background.jpg").resize((width, height), Image.Resampling.LANCZOS)
+except FileNotFoundError:
+    img = Image.new('RGB', (width, height), color='#4F46E5')
 
-        overlay = Image.new('RGBA', img.size, (0, 0, 0, 160))
-        img = Image.alpha_composite(img, overlay)
-        draw = ImageDraw.Draw(img)
+if img.mode != 'RGBA':
+    img = img.convert('RGBA')
 
-        try:
-            font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 130)
-            font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
-            font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 40)
-        except IOError:
-            font_heavy = font_tagline = font_light = ImageFont.load_default()
+# Overlay sombre pour contraste
+overlay = Image.new('RGBA', img.size, (0, 0, 0, 160))
+img = Image.alpha_composite(img, overlay)
 
-        draw.text((540, 150), "✨ PROMO SPÉCIALE ✨", font=font_tagline, fill='white', anchor='mm', align='center')
-        draw.text((540, 480), "\n".join(textwrap.wrap(promo_text_for_fallback, width=18)), font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=2, stroke_fill='black')
-        draw.text((540, 700), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
-        draw.line([(50, 880), (1030, 880)], fill="white", width=2)
-        draw.text((540, 930), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_light, fill='white', anchor='mm', align='center')
+draw = ImageDraw.Draw(img)
 
-        img = img.convert("RGB")
-        img.save(img_path)
+# Charger les polices
+try:
+    font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 180)
+    font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 90)
+    font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
+except IOError:
+    font_heavy = font_tagline = font_light = ImageFont.load_default()
 
-        return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
+center_x = width // 2
+
+# ✨ Texte principal
+draw.text((center_x, 200), "✨ PROMO SPÉCIALE ✨", font=font_tagline, fill='white', anchor='mm', align='center')
+
+# 🟡 Produit + Prix
+y_product = 500
+for line in textwrap.wrap(promo_text, width=22):
+    draw.text((center_x, y_product), line, font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=3, stroke_fill='black')
+    y_product += 200
+
+# 🔥 Tagline
+draw.text((center_x, y_product + 60), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
+
+# Ligne horizontale
+draw.line([(200, height - 300), (width - 200, height - 300)], fill="white", width=2)
+
+# 📆 Footer
+draw.text((center_x, height - 230), footer, font=font_light, fill='white', anchor='mm', align='center')
+
+# Sauvegarde
+img = img.convert("RGB")
+img.save(img_path)
+
+return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
 
 
 
