@@ -119,105 +119,84 @@ async def generate_message(req: MessageRequest):
     prompt = f"""Tu es un expert en marketing digital en contexte Ivoirien pour les petites entreprises africaines. Rédige un message et percutant pour une publication WhatsApp et Facebook. Soit persuasif, libre et créatif. Le ton doit être joyeux, professionnel et donner envie. - Artisan: {req.nom} ({req.metier}) - Service/Produit: {req.service} - Offre Spéciale: {req.offre}. Termine par un appel à l'action clair. Utilise 2-3 emojis pertinents. ✨📞🎉"""
     response = text_model.generate_content(prompt); return {"message_text": response.text}
 
-router = APIRouter()
-
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))  # ou directement: genai.configure(api_key="ta_clé")
 
 @app.post("/generate-promo-image", tags=["Générateurs"], response_class=FileResponse)
 async def generate_promo_image(req: PromoRequest):
     if not text_model:
         raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    prompt = f"""Create a vibrant, modern African-style promotional poster.
-Product: {req.product}, Price: {req.price} FCFA.
-Focus: product photography, clean composition, abstract African patterns.
-Text: 'Chez {req.nom}' and the price."""
-    
+    # 1. Préparation du Texte et du Slogan par l'IA
+    main_offer_text = req.product.upper()
+    price_text = f"À SEULEMENT {req.price} FCFA"
+    prompt = f"""Crée un slogan court, percutant et élégant (3-5 mots max) pour une promotion sur des '{req.product}'. Soit créatif et persuasif."""
     try:
-        print("🚀 Génération avec Gemini...")
+        response = text_model.generate_content(prompt)
+        tagline = response.text.strip().replace('"', '')
+    except Exception:
+        tagline = "L'Offre à ne pas Manquer !"
 
-        model = genai.GenerativeModel("gemini-2.0-flash-preview-image-generation")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig()
-        )
+    # 2. Création de l'Image de Fond
+    img_id = f"promo_pro_{uuid.uuid4()}.png"
+    img_path = os.path.join(IMG_DIR, img_id)
+    width, height = 2000, 2000
+    try:
+        # On essaie de charger l'image de fond en bois que vous avez fournie
+        background = Image.open("font/background.jpg").resize((width, height), Image.Resampling.LANCZOS)
+    except FileNotFoundError:
+        print("⚠️ background.jpg non trouvé. Utilisation d'un dégradé.")
+        # Superbe dégradé en fallback, beaucoup plus pro qu'une couleur unie
+        background = Image.new("RGB", (width, height))
+        draw = ImageDraw.Draw(background)
+        for i in range(height):
+            # Dégradé du bleu nuit au violet
+            color = (
+                int(20 + (i / height) * 30), # R
+                int(20 + (i / height) * 20), # G
+                int(80 + (i / height) * 60)  # B
+            )
+            draw.line([(0, i), (width, i)], fill=color)
 
-        image_part = next((part for part in response.parts if part.inline_data), None)
-        if not image_part:
-            raise ValueError("❌ Aucune image générée.")
+    if background.mode != 'RGBA': background = background.convert('RGBA')
+    
+    # 3. Création d'une toile transparente pour les textes
+    txt_layer = Image.new('RGBA', background.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txt_layer)
 
-        image_bytes = image_part.inline_data.data
-        img = Image.open(BytesIO(image_bytes))
+    # 4. Chargement des polices
+    try:
+        font_main = ImageFont.truetype("font/Poppins-Bold.ttf", 140)
+        font_price = ImageFont.truetype("font/Poppins-Bold.ttf", 100)
+        font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
+        font_footer = ImageFont.truetype("font/Poppins-Regular.ttf", 35)
+    except IOError:
+        font_main, font_price, font_tagline, font_footer = [ImageFont.load_default()]*4
 
-        img_id = f"promo_ai_{uuid.uuid4()}.png"
-        img_path = os.path.join(IMG_DIR, img_id)
-        img.save(img_path)
+    # 5. Dessin des éléments graphiques et du texte
+    
+    # Bandeau "PROMO SPÉCIALE"
+    draw.rectangle([(0, 100), (width, 200)], fill="#FFD700")
+    draw.text((width/2, 150), "PROMO SPÉCIALE", font=font_tagline, fill="black", anchor="mm")
 
-        print(f"✅ Image générée et sauvegardée : {img_path}")
-        return FileResponse(path=img_path, media_type="image/png", filename=f"Promo_AI_{req.nom}.png")
+    # Texte principal de l'offre
+    draw.text((width/2, 400), "\n".join(textwrap.wrap(main_offer_text, width=15)), font=font_main, fill="white", anchor="mm", align="center", stroke_width=3, stroke_fill="black")
 
-    except Exception as e:
-# Fallback avec Pillow
-print("🎨 Passage à la méthode de secours (Pillow).")
+    # Prix
+    draw.text((width/2, 600), price_text, font=font_price, fill="#FFD700", anchor="mm", align="center")
 
-promo_text = f"{req.product.upper()} À {req.price} FCFA"
-tagline = "L'Offre à ne pas Manquer !"
-footer = f"Chez {req.nom} - Valable jusqu'au {req.date}"
+    # Slogan
+    draw.text((width/2, 720), tagline, font=font_tagline, fill="white", anchor="mm", align="center")
 
-img_id = f"promo_fallback_{uuid.uuid4()}.png"
-img_path = os.path.join(IMG_DIR, img_id)
+    # Footer
+    draw.text((width/2, 950), f"Chez {req.nom} - Valable jusqu'au {req.date}", font=font_footer, fill="white", anchor="mm", align="center")
 
-# Taille de l’image
-width, height = 2000, 2500
+    # 6. Fusion de l'image de fond et de la toile de texte
+    out = Image.alpha_composite(background, txt_layer)
 
-# Charger le background s'il existe
-try:
-    img = Image.open("font/background.jpg").resize((width, height), Image.Resampling.LANCZOS)
-except FileNotFoundError:
-    img = Image.new('RGB', (width, height), color='#4F46E5')
+    # 7. Sauvegarde
+    out = out.convert("RGB")
+    out.save(img_path)
 
-if img.mode != 'RGBA':
-    img = img.convert('RGBA')
-
-# Overlay sombre pour contraste
-overlay = Image.new('RGBA', img.size, (0, 0, 0, 160))
-img = Image.alpha_composite(img, overlay)
-
-draw = ImageDraw.Draw(img)
-
-# Charger les polices
-try:
-    font_heavy = ImageFont.truetype("font/Poppins-Bold.ttf", 180)
-    font_tagline = ImageFont.truetype("font/Poppins-Regular.ttf", 90)
-    font_light = ImageFont.truetype("font/Poppins-Regular.ttf", 60)
-except IOError:
-    font_heavy = font_tagline = font_light = ImageFont.load_default()
-
-center_x = width // 2
-
-# ✨ Texte principal
-draw.text((center_x, 200), "✨ PROMO SPÉCIALE ✨", font=font_tagline, fill='white', anchor='mm', align='center')
-
-# 🟡 Produit + Prix
-y_product = 500
-for line in textwrap.wrap(promo_text, width=22):
-    draw.text((center_x, y_product), line, font=font_heavy, fill='#FFD700', anchor='mm', align='center', stroke_width=3, stroke_fill='black')
-    y_product += 200
-
-# 🔥 Tagline
-draw.text((center_x, y_product + 60), tagline, font=font_tagline, fill='white', anchor='mm', align='center')
-
-# Ligne horizontale
-draw.line([(200, height - 300), (width - 200, height - 300)], fill="white", width=2)
-
-# 📆 Footer
-draw.text((center_x, height - 230), footer, font=font_light, fill='white', anchor='mm', align='center')
-
-# Sauvegarde
-img = img.convert("RGB")
-img.save(img_path)
-
-return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_Fallback_{req.nom}.png")
+    return FileResponse(path=img_path, media_type='image/png', filename=f"Promo_{req.nom}.png")
 
 
 
