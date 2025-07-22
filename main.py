@@ -1,4 +1,4 @@
-# main.py - VERSION 5.1.1
+# main.py
 import os
 import uuid
 import textwrap
@@ -47,7 +47,7 @@ except Exception as e:
     print(f"⚠️ Polices Poppins non trouvées. Erreur: {e}")
 
 
-# --- Modèles Pydantic (TOUS REGROUPÉS ICI) ---
+# --- Modèles Pydantic
 class LineItem(BaseModel):
     description: str
     price: str
@@ -59,7 +59,7 @@ class DevisRequest(BaseModel):
     date: str
     items: List[LineItem]
 
-class MessageRequest(BaseModel): # <-- LA CLASSE MANQUANTE A ÉTÉ AJOUTÉE
+class MessageRequest(BaseModel):
     nom: str
     metier: str
     service: str
@@ -80,7 +80,7 @@ class FeedbackRequest(BaseModel):
     rating: str
 
 
-# --- Endpoints (TOUS REGROUPÉS ICI) ---
+# --- Endpoints
 
 @app.get("/", tags=["Status"])
 def read_root():
@@ -124,7 +124,6 @@ async def generate_message(req: MessageRequest):
 async def generate_promo_image(req: PromoRequest):
     if not text_model: raise HTTPException(status_code=503, detail="Service IA indisponible.")
 
-    # --- PROMPT ULTRA-PRÉCIS POUR LE SLOGAN ---
     prompt = f"""Crée UN SEUL slogan court et percutant (3-5 mots max) pour une promotion sur des '{req.product}'. Rédige UNIQUEMENT le slogan, sans aucune phrase d'introduction comme "Voici un slogan". Exemple: 'Le style à vos pieds'."""
     try:
         response = text_model.generate_content(prompt)
@@ -156,7 +155,7 @@ async def generate_promo_image(req: PromoRequest):
     except IOError:
         font_main, font_price, font_tagline, font_footer = [ImageFont.load_default()]*4
 
-    # --- NOUVEAU DESIGN PROFESSIONNEL ---
+    # - DESIGN PROFESSIONNEL ---
     draw.rectangle([(0, 80), (width, 220)], fill="#FFD700")
     draw.text((width/2, 150), "PROMO SPÉCIALE", font=font_tagline, fill="black", anchor="mm")
 
